@@ -92,7 +92,7 @@ public:
                 return lowPtr;
             } else if (allocType == 1) {//从栈顶分配,指针得往下移动，:)
                 ObjectType* highPtr = reinterpret_cast<ObjectType*>(_apBaseAndCap[1]);
-                for (size_t index = 0; index < objectNum; index++) {
+                for (size_t index = 1; index <= objectNum; index++) {
                     ObjectType* object = ::new (std::addressof(highPtr - index * objSize)) ObjectType(std::forward<Args>(args)...);
                     registerObject(object);
                 }
