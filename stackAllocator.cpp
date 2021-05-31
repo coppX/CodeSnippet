@@ -10,7 +10,7 @@ typedef unsigned int uint;
 class StackAllocatorDestructor {
 private:
     void* dataPtr;
-    void (*destructor)(void*);
+    void(*destructor)(void*);
 
 public:
     template<typename ObjectPtr>
@@ -70,7 +70,37 @@ public:
 
     template<typename ObjectType, typename...Args>
     ObjectType* allocate(int allocType, size_t objectNum, Args...args) {
+        if (objectNum <= 0) {
+            return nullptr;
+        }
 
+        size_t objSize = sizeof(ObjectType);
+        size_t size = objSize * objectNum;
+        ptrdiff_t diff = _apBaseAndCap[1] - _apBaseAndCap[0];
+
+        if (size < diff) {
+            //TODO:要考虑内存对齐的哦
+            if (allocType == 0) {//从栈底分配
+                ObjectType* lowPtr = reinterpret_cast<ObjectType*>(_apBaseAndCap[0]);
+                for (size_t index = 0; index < objectNum; index++) {
+                    //在栈底空间上构建对象
+                    ObjectType* object = ::new (std::addressof(lowPtr[index])) ObjectType(std::forward<Args>(args)...);
+                    //将对象注册到析构类中
+                    registerObject(object);
+                }
+                _apBaseAndCap[0] += size;
+                return lowPtr;
+            } else if (allocType == 1) {//从栈顶分配,指针得往下移动，:)
+                ObjectType* highPtr = reinterpret_cast<ObjectType*>(_apBaseAndCap[1]);
+                for (size_t index = 0; index < objectNum; index++) {
+                    ObjectType* object = ::new (std::addressof(highPtr - index * objSize)) ObjectType(std::forward<Args>(args)...);
+                    registerObject(object);
+                }
+                _apBaseAndCap[1] -= size;
+                return highPtr;
+            }
+        } else {
+            return nullptr;//空间不足
+        }
     }
-
 };
