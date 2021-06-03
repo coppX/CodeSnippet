@@ -1,5 +1,6 @@
 #include <vector>
 #include <unordered_map>
+#include <mutex>
 
 using namespace std;
 
@@ -16,7 +17,7 @@ private:
 
 public:
     template<typename ObjectPtr>
-    StackAllocatorDestructor (ObjectPtr ptr) {
+    StackAllocatorDestructor(ObjectPtr ptr) {
         dataPtr = static_cast<void*>(ptr);
         destructor = [](void* objPtr) {
             auto obj = static_cast<ObjectPtr>(objPtr);
@@ -24,7 +25,7 @@ public:
         };
     }
 
-    void operator()(){
+    void operator()() {
         destructor(dataPtr);
     }
 };
@@ -54,14 +55,15 @@ private:
     size_t allocSize_;
     int _nByteAlignment;
 
-    u8 *_memeryBase;
-    u8 *_apBaseAndCap[2];//栈底和栈顶
-    u8 *_apFrame[2];//低帧和高帧指针
+    u8* _memeryBase;
+    u8* _apBaseAndCap[2];//栈底和栈顶
+    u8* _apFrame[2];//低帧和高帧指针
 
     std::unordered_map<int, vector<StackAllocatorDestructor>> objectRegister;
-    StackAllocatorMarker *_apMarker[2];
+    StackAllocatorMarker* _apMarker[2];
+    std::mutex _mutex;
 public:
-   explicit StackAllocator(size_t allocSize, size_t align = 8) 
+    explicit StackAllocator(size_t allocSize, size_t align = 8)
         : allocSize_(ALIGNUP(allocSize, align)), _nByteAlignment(align)
     {
         _memeryBase = new u8[allocSize_];
@@ -78,12 +80,12 @@ public:
     }
 
     ~StackAllocator() {
-        delete [] _memeryBase;
+        delete[] _memeryBase;
     }
 
     template<typename ObjectType>
     typename std::enable_if<std::is_trivially_destructible<ObjectType>::value>::type
-    registerObject(int allocType, ObjectType* object) {
+        registerObject(int allocType, ObjectType* object) {
         auto iter = objectRegister.find(allocType);
         if (iter != objectRegister.end()) {
             iter->second.push_back(StackAllocatorDestructor(object));
@@ -92,8 +94,8 @@ public:
 
     template<typename ObjectType>
     typename std::enable_if<!std::is_trivially_destructible<ObjectType>::value>::type
-    registerObject(int allocType, ObjectType* object) {
-        
+        registerObject(int allocType, ObjectType* object) {
+
     }
 
     template<typename ObjectType, typename...Args>
@@ -101,6 +103,7 @@ public:
         if (objectNum <= 0) {
             return nullptr;
         }
+        std::lock_guard<std::mutex> lock(_mutex);
 
         size_t objSize = sizeof(ObjectType);
         size_t size = objSize * objectNum;
@@ -133,6 +136,7 @@ public:
     }
 
     void setMarker(int allocType) {
+        std::lock_guard<std::mutex> lock(_mutex);
         if (allocType == 0) {
             if (_apMarker[0]) delete _apMarker[0];
             _apMarker[0] = new StackAllocatorMarker(_apFrame[0], objectRegister[0].size());
@@ -143,6 +147,7 @@ public:
     }
 
     void releaseToMarker(int allocType) {
+        std::lock_guard<std::mutex> lock(_mutex);
         u8* ptr;
         size_t objNum;
         if (allocType == 0) {
@@ -152,7 +157,7 @@ public:
                 objectRegister[0].back()();
                 objectRegister[0].pop_back();
             }
-            _apBaseAndCap[0] = ptr;
+            _apFrame[0] = ptr;
         } else {
             ptr = _apMarker[1]->getMarkerPtr();
             objNum = _apMarker[1]->getMarkerNum();
@@ -160,25 +165,24 @@ public:
                 objectRegister[1].back()();
                 objectRegister[1].pop_back();
             }
-            _apBaseAndCap[1] = ptr;
+            _apFrame[1] = ptr;
         }
     }
 
     void releaseAll(int allocType) {
-        u8* ptr;
-        size_t objNum;
+        std::lock_guard<std::mutex> lock(_mutex);
         if (allocType == 0) {
             for (int i = objectRegister[0].size(); i > 0; i--) {
                 objectRegister[0].back()();
                 objectRegister[0].pop_back();
             }
-            _apBaseAndCap[0] = ptr;
+            _apFrame[0] = _apBaseAndCap[0];
         } else {
             for (int i = objectRegister[1].size(); i > 0; i--) {
                 objectRegister[1].back()();
                 objectRegister[1].pop_back();
             }
-            _apBaseAndCap[1] = ptr;
+            _apFrame[1] = _apBaseAndCap[1];
         }
     }
 };
