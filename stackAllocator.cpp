@@ -2,7 +2,9 @@
 #include <unordered_map>
 #include <mutex>
 
-using namespace std;
+using std::vector;
+using std::unordered_map;
+using std::mutex;
 
 #define ALIGNUP(nAddress, nBytes) ((((uint)nAddress) + (nBytes) - 1) & (~((nBytes) - 1)))
 
@@ -12,31 +14,31 @@ typedef unsigned int uint;
 //用来析构对象
 class StackAllocatorDestructor {
 private:
-    void* dataPtr;
-    void(*destructor)(void*);
+    void* _dataPtr;
+    void(*_destructor)(void*);
 
 public:
     template<typename ObjectPtr>
     StackAllocatorDestructor(ObjectPtr ptr) {
-        dataPtr = static_cast<void*>(ptr);
-        destructor = [](void* objPtr) {
+        _dataPtr = static_cast<void*>(ptr);
+        _destructor = [](void* objPtr) {
             auto obj = static_cast<ObjectPtr>(objPtr);
             obj->~ObjectPtr();
         };
     }
 
     void operator()() {
-        destructor(dataPtr);
+        _destructor(_dataPtr);
     }
 };
 
 class StackAllocatorMarker {
 private:
     u8* _marker;
-    size_t objNum;
+    size_t _objNum;
 public:
     StackAllocatorMarker(u8* marker, size_t num)
-        : _marker(marker), objNum(num)
+        : _marker(marker), _objNum(num)
     {
 
     }
@@ -46,30 +48,30 @@ public:
     }
 
     size_t getMarkerNum() {
-        return objNum;
+        return _objNum;
     }
 };
 
 class StackAllocator {
 private:
-    size_t allocSize_;
+    size_t _allocSize;
     int _nByteAlignment;
 
     u8* _memeryBase;
     u8* _apBaseAndCap[2];//栈底和栈顶
     u8* _apFrame[2];//低帧和高帧指针
 
-    std::unordered_map<int, vector<StackAllocatorDestructor>> objectRegister;
+    std::unordered_map<int, vector<StackAllocatorDestructor>> _objectRegister;
     StackAllocatorMarker* _apMarker[2];
     std::mutex _mutex;
 public:
     explicit StackAllocator(size_t allocSize, size_t align = 8)
-        : allocSize_(ALIGNUP(allocSize, align)), _nByteAlignment(align)
+        : _allocSize(ALIGNUP(allocSize, align)), _nByteAlignment(align)
     {
-        _memeryBase = new u8[allocSize_];
+        _memeryBase = new u8[_allocSize];
         if (!_memeryBase) {
             _apBaseAndCap[0] = _memeryBase;
-            _apBaseAndCap[1] = _apBaseAndCap[0] + allocSize_;
+            _apBaseAndCap[1] = _apBaseAndCap[0] + _allocSize;
 
             _apFrame[0] = _apBaseAndCap[0];
             _apFrame[1] = _apBaseAndCap[1];
@@ -86,8 +88,8 @@ public:
     template<typename ObjectType>
     typename std::enable_if<std::is_trivially_destructible<ObjectType>::value>::type
         registerObject(int allocType, ObjectType* object) {
-        auto iter = objectRegister.find(allocType);
-        if (iter != objectRegister.end()) {
+        auto iter = _objectRegister.find(allocType);
+        if (iter != _objectRegister.end()) {
             iter->second.push_back(StackAllocatorDestructor(object));
         }
     }
@@ -121,10 +123,10 @@ public:
                 }
                 _apFrame[0] += size;
                 return lowPtr;
-            } else if (allocType == 1) {//从栈顶分配,指针得往下移动，:)
+            } else {//从栈顶分配,指针得往下移动，:)
                 ObjectType* highPtr = reinterpret_cast<ObjectType*>(_apFrame[1]);
                 for (size_t index = 1; index <= objectNum; index++) {
-                    ObjectType* object = ::new (std::addressof(highPtr - index * objSize)) ObjectType(std::forward<Args>(args)...);
+                    ObjectType* object = ::new (std::addressof(highPtr[-index])) ObjectType(std::forward<Args>(args)...);
                     registerObject(object);
                 }
                 _apFrame[1] -= size;
@@ -139,10 +141,10 @@ public:
         std::lock_guard<std::mutex> lock(_mutex);
         if (allocType == 0) {
             if (_apMarker[0]) delete _apMarker[0];
-            _apMarker[0] = new StackAllocatorMarker(_apFrame[0], objectRegister[0].size());
+            _apMarker[0] = new StackAllocatorMarker(_apFrame[0], _objectRegister[0].size());
         } else {
             if (_apMarker[1]) delete _apMarker[1];
-            _apMarker[1] = new StackAllocatorMarker(_apFrame[1], objectRegister[1].size());
+            _apMarker[1] = new StackAllocatorMarker(_apFrame[1], _objectRegister[1].size());
         }
     }
 
@@ -153,17 +155,17 @@ public:
         if (allocType == 0) {
             ptr = _apMarker[0]->getMarkerPtr();
             objNum = _apMarker[0]->getMarkerNum();
-            for (int i = objectRegister[0].size(); i > objNum; i--) {
-                objectRegister[0].back()();
-                objectRegister[0].pop_back();
+            for (int i = _objectRegister[0].size(); i > objNum; i--) {
+                _objectRegister[0].back()();
+                _objectRegister[0].pop_back();
             }
             _apFrame[0] = ptr;
         } else {
             ptr = _apMarker[1]->getMarkerPtr();
             objNum = _apMarker[1]->getMarkerNum();
-            for (int i = objectRegister[1].size(); i > objNum; i--) {
-                objectRegister[1].back()();
-                objectRegister[1].pop_back();
+            for (int i = _objectRegister[1].size(); i > objNum; i--) {
+                _objectRegister[1].back()();
+                _objectRegister[1].pop_back();
             }
             _apFrame[1] = ptr;
         }
@@ -172,15 +174,15 @@ public:
     void releaseAll(int allocType) {
         std::lock_guard<std::mutex> lock(_mutex);
         if (allocType == 0) {
-            for (int i = objectRegister[0].size(); i > 0; i--) {
-                objectRegister[0].back()();
-                objectRegister[0].pop_back();
+            for (int i = _objectRegister[0].size(); i > 0; i--) {
+                _objectRegister[0].back()();
+                _objectRegister[0].pop_back();
             }
             _apFrame[0] = _apBaseAndCap[0];
         } else {
-            for (int i = objectRegister[1].size(); i > 0; i--) {
-                objectRegister[1].back()();
-                objectRegister[1].pop_back();
+            for (int i = _objectRegister[1].size(); i > 0; i--) {
+                _objectRegister[1].back()();
+                _objectRegister[1].pop_back();
             }
             _apFrame[1] = _apBaseAndCap[1];
         }
