@@ -6,8 +6,6 @@ using std::vector;
 using std::unordered_map;
 using std::mutex;
 
-#define ALIGNUP(nAddress, nBytes) ((((uint)nAddress) + (nBytes) - 1) & (~((nBytes) - 1)))
-
 typedef unsigned char u8;
 typedef unsigned int uint;
 
@@ -66,27 +64,69 @@ private:
     std::mutex _mutex;
 public:
     explicit StackAllocator(size_t allocSize, size_t align = 8)
-        : _allocSize(ALIGNUP(allocSize, align)), _nByteAlignment(align)
+        : _allocSize(allocSize), _nByteAlignment(align)
     {
-        _memeryBase = new u8[_allocSize];
-        if (!_memeryBase) {
-            _apBaseAndCap[0] = _memeryBase;
-            _apBaseAndCap[1] = _apBaseAndCap[0] + _allocSize;
+        _memeryBase = reinterpret_cast<u8*>(allocateAligned(_allocSize, _nByteAlignment));
+    }
+
+    ~StackAllocator() {
+        if (_memeryBase) {
+            freeAligned(_memeryBase);
+        }
+    }
+
+    void* allocateAligned(size_t size_bytes, size_t alignment) {
+        assert(alignment >= 1);
+        assert(alignment <= 128);
+        assert((alignment & (alignment - 1)) == 0);// alignment是2的幂
+        //计算总共要分配的内存量,为了内存对齐偏移量肯定是在0 ~ alignment - 1之间，多分配alignment字节空间肯定没错
+        size_t expandSize_bytes = size_bytes + alignment;
+
+        //分配未对齐的内存块，并转换地址为uintptr_t
+        uintptr_t rawAddress = reinterpret_cast<uintptr_t>(new u8[expandSize_bytes]);
+        
+        if (rawAddress) {
+            //使用掩码去除地址低位部分，计算错误量，从而计算调整量
+            size_t mask = alignment - 1;
+            uintptr_t misalignment = (rawAddress & mask);
+            ptrdiff_t adjustment = alignment - misalignment;
+            
+            //计算调整后的地址
+            uintptr_t alignedAddress = rawAddress + adjustment;
+
+            //把alignment存储在地址的前一个字节,只取int最低的一个字节就足够
+            assert(adjustment < 256);
+            u8* pAdjustment = reinterpret_cast<u8*>(alignedAddress);
+            pAdjustment[-1] = static_cast<u8>(adjustment);
+
+            _apBaseAndCap[0] = pAdjustment;
+            _apBaseAndCap[1] = pAdjustment + expandSize_bytes - adjustment;
 
             _apFrame[0] = _apBaseAndCap[0];
             _apFrame[1] = _apBaseAndCap[1];
 
             _apMarker[0] = nullptr;
             _apMarker[1] = nullptr;
+
+            return reinterpret_cast<void*>(alignedAddress);
+        } else {
+            return nullptr;
         }
     }
 
-    ~StackAllocator() {
-        delete[] _memeryBase;
+    void freeAligned(void *pMen) {
+        const u8* pAlignedMem = reinterpret_cast<const u8*>(pMen);
+        uintptr_t alignedAddress = reinterpret_cast<uintptr_t>(pMen);
+
+        ptrdiff_t adjustment = static_cast<ptrdiff_t>(pAlignedMem[-1]);
+
+        uintptr_t rawAddress = alignedAddress - adjustment;
+        u8* pRawMem = reinterpret_cast<u8*>(rawAddress);
+        delete [] pRawMem;
     }
 
     template<typename ObjectType>
-    typename std::enable_if<std::is_trivially_destructible<ObjectType>::value>::type
+    typename std::enable_if<!std::is_trivially_destructible<ObjectType>::value>::type
         registerObject(int allocType, ObjectType* object) {
         auto iter = _objectRegister.find(allocType);
         if (iter != _objectRegister.end()) {
@@ -95,14 +135,14 @@ public:
     }
 
     template<typename ObjectType>
-    typename std::enable_if<!std::is_trivially_destructible<ObjectType>::value>::type
+    typename std::enable_if<std::is_trivially_destructible<ObjectType>::value>::type
         registerObject(int allocType, ObjectType* object) {
 
     }
 
     template<typename ObjectType, typename...Args>
     ObjectType* allocate(int allocType, size_t objectNum, Args...args) {
-        if (objectNum <= 0) {
+        if (objectNum <= 0 || !_memeryBase) {
             return nullptr;
         }
         std::lock_guard<std::mutex> lock(_mutex);
@@ -112,14 +152,13 @@ public:
         ptrdiff_t diff = _apFrame[1] - _apFrame[0];
 
         if (size < diff) {
-            //TODO:要考虑内存对齐的哦
             if (allocType == 0) {//从栈底分配
                 ObjectType* lowPtr = reinterpret_cast<ObjectType*>(_apFrame[0]);
                 for (size_t index = 0; index < objectNum; index++) {
                     //在栈底空间上构建对象
                     ObjectType* object = ::new (std::addressof(lowPtr[index])) ObjectType(std::forward<Args>(args)...);
                     //将对象注册到析构类中
-                    registerObject(object);
+                    registerObject(allocType, object);
                 }
                 _apFrame[0] += size;
                 return lowPtr;
@@ -127,7 +166,7 @@ public:
                 ObjectType* highPtr = reinterpret_cast<ObjectType*>(_apFrame[1]);
                 for (size_t index = 1; index <= objectNum; index++) {
                     ObjectType* object = ::new (std::addressof(highPtr[-index])) ObjectType(std::forward<Args>(args)...);
-                    registerObject(object);
+                    registerObject(allocType, object);
                 }
                 _apFrame[1] -= size;
                 return highPtr;
