@@ -1,6 +1,7 @@
 #include <vector>
 #include <unordered_map>
 #include <mutex>
+#include <cassert>
 
 using std::vector;
 using std::unordered_map;
