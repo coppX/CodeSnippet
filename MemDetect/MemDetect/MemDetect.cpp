@@ -1,5 +1,6 @@
 #include <mutex>
 #include <cassert>
+#include <new>
 
 #define FILENAME_SIZE     200
 #define DEBUG_ALIGNMENT   16
@@ -15,7 +16,7 @@ struct ptr_list_item {
 		, size(0)
 		, line(0)
 	{
-    memset(file, '\0', FILENAME_SIZE);
+        memset(file, '\0', FILENAME_SIZE);
 	}
 
 	ptr_list_item* prev;
@@ -44,6 +45,8 @@ private:
 	static ptr_list_item* list;
 	static std::mutex m;
 };
+ptr_list_item* MemDetect::list = nullptr;
+std::mutex MemDetect::m = {};
 
 void* MemDetect::allocate(size_t size, const char* filename, int line)
 {
@@ -61,16 +64,19 @@ void* MemDetect::allocate(size_t size, const char* filename, int line)
 		}
 		else
 		{
-			raw_ptr->next = list->next;
-			list->next->prev = raw_ptr;
+            raw_ptr->next = list;
+            list->prev = raw_ptr;
 			list = raw_ptr;
 		}
 	}
 	
 	raw_ptr->size = size;
 	raw_ptr->line = line;
-	strncpy(raw_ptr->file, filename, strlen(filename));
-	raw_ptr->file[strlen(filename)] = '\0';
+    if (nullptr != filename)
+    {
+        strncpy(raw_ptr->file, filename, strlen(filename));
+        raw_ptr->file[strlen(filename)] = '\0';
+    }
 
 	return reinterpret_cast<void*>(user_ptr);
 }
@@ -96,7 +102,7 @@ void MemDetect::deallocate (void* ptr)
 		temp->prev->next = temp->next;
 		temp->next->prev = temp->prev;
 	}
-
+    printf("free memory %d, this size is %d byte\n", (int*)temp, temp->size);
 	free(temp);
 }
 
@@ -141,22 +147,22 @@ void operator delete[](void* ptr) noexcept
   MemDetect::operator delete[](ptr);
 }
 
-void* operator new(size_t size, nothrow_t&) noexcept
+void* operator new(size_t size, std::nothrow_t&) noexcept
 {
   return MemDetect::operator new(size, nullptr, 0);
 }
 
-void* operator new[](size_t size, nothrow_t&) noexcept
+void* operator new[](size_t size, std::nothrow_t&) noexcept
 {
   return MemDetect::operator new[](size, nullptr, 0);
 }
 
-void operator delete(void* ptr, nothrow_t&) noexcept
+void operator delete(void* ptr, std::nothrow_t&) noexcept
 {
   MemDetect::operator delete(ptr);
 }
 
-void operator delete[](void* ptr, nothrow_t&) noexcept
+void operator delete[](void* ptr, std::nothrow_t&) noexcept
 {
   MemDetect::operator delete[](ptr);
 }
@@ -164,6 +170,8 @@ void operator delete[](void* ptr, nothrow_t&) noexcept
 
 int main()
 {
+    //test
+    int* a = new int[10];
 	MemDetect d;
 	return 0;
 }
