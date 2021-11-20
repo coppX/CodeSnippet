@@ -1,11 +1,8 @@
 #include <mutex>
 #include <cassert>
 
-#define FILENAME_SIZE 200
-
-#ifndef DEBUG_ALIGNMENT
-#define DEBUG_ALIGNMENT 16
-#endif
+#define FILENAME_SIZE     200
+#define DEBUG_ALIGNMENT   16
 
 #define ALIGN(s) (((s) + DEBUG_ALIGNMENT - 1) & ~(DEBUG_ALIGNMENT - 1))
 
@@ -18,7 +15,7 @@ struct ptr_list_item {
 		, size(0)
 		, line(0)
 	{
-
+    memset(file, '\0', FILENAME_SIZE);
 	}
 
 	ptr_list_item* prev;
@@ -35,21 +32,20 @@ struct ptr_list_item {
 class MemDetect
 {
 public:
-	//MemDetect();
-	//~MemDetect();
-	static void* operator new(size_t size);
-	static void operator delete(void *pdead, size_t size);
+	static void* operator new(size_t size, const char* file, int line);
+	static void operator delete(void *pdead);
 
-	static void* operator new[](size_t size);
-	static void operator delete[](void* pdead, size_t size);
+	static void* operator new[](size_t size, const char* file, int line);
+	static void operator delete[](void* pdead);
+
 private:
-	void* allocate(size_t size, char* filename, int line);
-	void deallocate(void* ptr);
-	ptr_list_item* list;
-	std::mutex m;
+	static void* allocate(size_t size, const char* filename, int line);
+	static void deallocate(void* ptr);
+	static ptr_list_item* list;
+	static std::mutex m;
 };
 
-void* MemDetect::allocate(size_t size, char* filename, int line)
+void* MemDetect::allocate(size_t size, const char* filename, int line)
 {
 	int s = size + LIST_ITEM_SIZE;
 	ptr_list_item* raw_ptr = reinterpret_cast<ptr_list_item*>(malloc(s));
@@ -74,7 +70,7 @@ void* MemDetect::allocate(size_t size, char* filename, int line)
 	raw_ptr->size = size;
 	raw_ptr->line = line;
 	strncpy(raw_ptr->file, filename, strlen(filename));
-	filename[strlen(filename)] = '\0';
+	raw_ptr->file[strlen(filename)] = '\0';
 
 	return reinterpret_cast<void*>(user_ptr);
 }
@@ -103,6 +99,68 @@ void MemDetect::deallocate (void* ptr)
 
 	free(temp);
 }
+
+void* MemDetect::operator new(size_t size, const char* filename, int line)
+{
+  return allocate(size, filename, line);
+}
+
+void* MemDetect::operator new[](size_t size, const char* filename, int line)
+{
+  return allocate(size, filename, line);
+}
+
+void MemDetect::operator delete(void* pdead)
+{
+  deallocate(pdead);
+}
+
+void MemDetect::operator delete[](void* pdead)
+{
+  deallocate(pdead);
+}
+
+#ifdef DEBUG
+void* operator new(size_t size)
+{
+  return MemDetect::operator new(size, nullptr, 0);
+}
+
+void* operator new[](size_t size)
+{
+  return MemDetect::operator new[](size, nullptr, 0);
+}
+
+void operator delete(void* ptr) noexcept
+{
+  MemDetect::operator delete(ptr);
+}
+
+void operator delete[](void* ptr) noexcept
+{
+  MemDetect::operator delete[](ptr);
+}
+
+void* operator new(size_t size, nothrow_t&) noexcept
+{
+  return MemDetect::operator new(size, nullptr, 0);
+}
+
+void* operator new[](size_t size, nothrow_t&) noexcept
+{
+  return MemDetect::operator new[](size, nullptr, 0);
+}
+
+void operator delete(void* ptr, nothrow_t&) noexcept
+{
+  MemDetect::operator delete(ptr);
+}
+
+void operator delete[](void* ptr, nothrow_t&) noexcept
+{
+  MemDetect::operator delete[](ptr);
+}
+#endif
 
 int main()
 {
