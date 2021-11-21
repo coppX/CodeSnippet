@@ -8,6 +8,8 @@
 #define ALIGN(s) (((s) + DEBUG_ALIGNMENT - 1) & ~(DEBUG_ALIGNMENT - 1))
 
 typedef unsigned char u8;
+static char filename[FILENAME_SIZE] = "\0";
+static int line = 0;
 
 struct ptr_list_item {
 	ptr_list_item()
@@ -16,7 +18,7 @@ struct ptr_list_item {
 		, size(0)
 		, line(0)
 	{
-        memset(file, '\0', FILENAME_SIZE);
+    memset(file, '\0', FILENAME_SIZE);
 	}
 
 	ptr_list_item* prev;
@@ -64,19 +66,19 @@ void* MemDetect::allocate(size_t size, const char* filename, int line)
 		}
 		else
 		{
-            raw_ptr->next = list;
-            list->prev = raw_ptr;
+      raw_ptr->next = list;
+      list->prev = raw_ptr;
 			list = raw_ptr;
 		}
 	}
 	
 	raw_ptr->size = size;
 	raw_ptr->line = line;
-    if (nullptr != filename)
-    {
-        strncpy(raw_ptr->file, filename, strlen(filename));
-        raw_ptr->file[strlen(filename)] = '\0';
-    }
+  if (nullptr != filename)
+  {
+    strcpy(raw_ptr->file, filename);
+    raw_ptr->file[strlen(filename)] = '\0';
+  }
 
 	return reinterpret_cast<void*>(user_ptr);
 }
@@ -91,18 +93,19 @@ void MemDetect::deallocate (void* ptr)
 	{
 		temp = temp->next;
 	}
-
-	if (nullptr == temp)
-	{
-		printf("can't find the ptr in the list!");
-		return;
-	}
+  if (!temp)
+  {
+    //printf("can't find the ptr in the list! it's the memory address that is not use the operator new to allocated.\n");
+    free(ptr);
+    return;
+  }
+  
 	{
 		std::lock_guard<std::mutex> lock(m);
-		temp->prev->next = temp->next;
-		temp->next->prev = temp->prev;
+		if (temp->prev) temp->prev->next = temp->next;
+		if (temp->next) temp->next->prev = temp->prev;
 	}
-    printf("free memory %d, this size is %d byte\n", (int*)temp, temp->size);
+  printf("free memory %d, this size is %d byte\n", (int*)temp, temp->size);
 	free(temp);
 }
 
@@ -127,14 +130,14 @@ void MemDetect::operator delete[](void* pdead)
 }
 
 #ifdef DEBUG
-void* operator new(size_t size)
+void* operator new(size_t size, const char* filename, int line)
 {
-  return MemDetect::operator new(size, nullptr, 0);
+  return MemDetect::operator new(size, filename, line);
 }
 
-void* operator new[](size_t size)
+void* operator new[](size_t size, const char* filename, int line)
 {
-  return MemDetect::operator new[](size, nullptr, 0);
+  return MemDetect::operator new[](size, filename, line);
 }
 
 void operator delete(void* ptr) noexcept
@@ -147,31 +150,16 @@ void operator delete[](void* ptr) noexcept
   MemDetect::operator delete[](ptr);
 }
 
-void* operator new(size_t size, std::nothrow_t&) noexcept
-{
-  return MemDetect::operator new(size, nullptr, 0);
-}
-
-void* operator new[](size_t size, std::nothrow_t&) noexcept
-{
-  return MemDetect::operator new[](size, nullptr, 0);
-}
-
-void operator delete(void* ptr, std::nothrow_t&) noexcept
-{
-  MemDetect::operator delete(ptr);
-}
-
-void operator delete[](void* ptr, std::nothrow_t&) noexcept
-{
-  MemDetect::operator delete[](ptr);
-}
+#define new new(__FILE__, __LINE__)
+//#define delete strcpy(filename, __FILE__), line = __LINE__, delete
 #endif
 
 int main()
 {
     //test
-    int* a = new int[10];
-	MemDetect d;
-	return 0;
+  int* a = new int;
+  
+  delete a;
+  
+  return 0;
 }
