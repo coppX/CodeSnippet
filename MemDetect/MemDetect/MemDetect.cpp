@@ -8,8 +8,8 @@
 #define ALIGN(s) (((s) + DEBUG_ALIGNMENT - 1) & ~(DEBUG_ALIGNMENT - 1))
 
 typedef unsigned char u8;
-static char filename[FILENAME_SIZE] = "\0";
-static int line = 0;
+//static char filename[FILENAME_SIZE] = "\0";
+//static int line = 0;
 
 struct ptr_list_item {
 	ptr_list_item()
@@ -26,7 +26,6 @@ struct ptr_list_item {
 	size_t size;
 
 	char file[FILENAME_SIZE];
-	void* addr;
 	size_t line;
 };
 
@@ -35,18 +34,12 @@ struct ptr_list_item {
 class MemDetect
 {
 public:
-	static void* operator new(size_t size, const char* file, int line);
-	static void operator delete(void *pdead);
-
-	static void* operator new[](size_t size, const char* file, int line);
-	static void operator delete[](void* pdead);
-
-private:
 	static void* allocate(size_t size, const char* filename, int line);
 	static void deallocate(void* ptr);
 	static ptr_list_item* list;
 	static std::mutex m;
 };
+
 ptr_list_item* MemDetect::list = nullptr;
 std::mutex MemDetect::m = {};
 
@@ -54,6 +47,7 @@ void* MemDetect::allocate(size_t size, const char* filename, int line)
 {
 	int s = size + LIST_ITEM_SIZE;
 	ptr_list_item* raw_ptr = reinterpret_cast<ptr_list_item*>(malloc(s));
+	memset(raw_ptr, '\0', s);
 	assert(raw_ptr != nullptr);
 
 	u8* user_ptr = reinterpret_cast<u8*>(raw_ptr) + LIST_ITEM_SIZE;
@@ -95,7 +89,7 @@ void MemDetect::deallocate (void* ptr)
 	}
   if (!temp)
   {
-    //printf("can't find the ptr in the list! it's the memory address that is not use the operator new to allocated.\n");
+    //printf("mac平台上会有一些非应用程序里面的delete操作，分配内存时并不是走的operator new(int, const char*, int),所以在释放的时候并不能从记录的内存信息里面找到，直接释放掉就行了.\n");
     free(ptr);
     return;
   }
@@ -109,45 +103,25 @@ void MemDetect::deallocate (void* ptr)
 	free(temp);
 }
 
-void* MemDetect::operator new(size_t size, const char* filename, int line)
-{
-  return allocate(size, filename, line);
-}
-
-void* MemDetect::operator new[](size_t size, const char* filename, int line)
-{
-  return allocate(size, filename, line);
-}
-
-void MemDetect::operator delete(void* pdead)
-{
-  deallocate(pdead);
-}
-
-void MemDetect::operator delete[](void* pdead)
-{
-  deallocate(pdead);
-}
-
-#ifdef DEBUG
+#ifdef _DEBUG
 void* operator new(size_t size, const char* filename, int line)
 {
-  return MemDetect::operator new(size, filename, line);
+  return MemDetect::allocate(size, filename, line);
 }
 
 void* operator new[](size_t size, const char* filename, int line)
 {
-  return MemDetect::operator new[](size, filename, line);
+  return MemDetect::allocate(size, filename, line);
 }
 
 void operator delete(void* ptr) noexcept
 {
-  MemDetect::operator delete(ptr);
+  MemDetect::deallocate(ptr);
 }
 
 void operator delete[](void* ptr) noexcept
 {
-  MemDetect::operator delete[](ptr);
+  MemDetect::deallocate(ptr);
 }
 
 #define new new(__FILE__, __LINE__)
@@ -156,10 +130,17 @@ void operator delete[](void* ptr) noexcept
 
 int main()
 {
-    //test
-  int* a = new int;
+	class A {
+		int a;
+		int b;
+	};
+	//test
+  A* a = new A[10];
   
-  delete a;
+  delete [] a;
+
+	int* b = new int;
+	delete b;
   
   return 0;
 }
