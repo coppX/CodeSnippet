@@ -10,7 +10,8 @@ set(CHAPTERS
 )
 
 set(test
-    test_template_if_while
+    test_template_if
+    test_template_while
 )
 
 foreach(CHAPTER ${CHAPTERS})
