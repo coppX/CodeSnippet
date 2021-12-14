@@ -1,10 +1,24 @@
 cmake_minimum_required(VERSION 3.21)
 project(CodeSnippet)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 set(CHAPTERS
-    test)
+    test
+)
 
+set(test
+    test_template_if_while
+)
+
+foreach(CHAPTER ${CHAPTERS})
+    foreach(DEMO ${${CHAPTER}})
+        file(GLOB SOURCE
+            "${CHAPTER}/${DEMO}.h"
+            "${CHAPTER}/${DEMO}.cpp")
+        add_executable(${DEMO} ${SOURCE})
+
+    endforeach(DEMO)
+endforeach(CHAPTER)
