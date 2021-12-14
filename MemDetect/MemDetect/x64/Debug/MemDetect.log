@@ -1,9 +1,0 @@
-﻿  MemDetect.cpp
-D:\learn\CodeSnippet\MemDetect\MemDetect\stackAllocator.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-D:\learn\CodeSnippet\MemDetect\MemDetect\stackAllocator.h(69,1): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\learn\CodeSnippet\MemDetect\MemDetect\stackAllocator.h(198,1): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\learn\CodeSnippet\MemDetect\MemDetect\stackAllocator.h(206,1): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\learn\CodeSnippet\MemDetect\MemDetect\stackAllocator.h(217,1): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\learn\CodeSnippet\MemDetect\MemDetect\stackAllocator.h(223,1): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-MSVCRTD.lib(exe_main.obj) : error LNK2019: 无法解析的外部符号 main，函数 "int __cdecl invoke_main(void)" (?invoke_main@@YAHXZ) 中引用了该符号
-D:\learn\CodeSnippet\MemDetect\x64\Debug\MemDetect.exe : fatal error LNK1120: 1 个无法解析的外部命令
