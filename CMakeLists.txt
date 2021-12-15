@@ -13,8 +13,8 @@ set(test
     test_template_if
     test_template_while
     test_gcd_lcm
+    test_loop_unrolling
 )
-
 foreach(CHAPTER ${CHAPTERS})
     foreach(DEMO ${${CHAPTER}})
         file(GLOB SOURCE
