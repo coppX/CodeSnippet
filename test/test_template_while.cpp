@@ -8,10 +8,10 @@
 template<int n, int e>
 class sum_pow{
 
-    template<int i, int e>
+    template<int i, int e1>
     class pow_e{
     public:
-        enum{ ret = i * pow_e<i, e - 1>::ret };
+        enum{ ret = i * pow_e<i, e1 - 1>::ret };
     };
 
     template<int i>
@@ -46,7 +46,5 @@ public:
 int main()
 {
     std::cout << sum_pow<10, 2>::ret << '\n';
-
-    std::cin.get();
     return 0;
 }

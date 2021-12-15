@@ -12,7 +12,7 @@ class IF_<false, Then, Else> { public: typedef Else reType; };
 
 template<template<typename> class Condition, typename Statement>
 class WHILE_ {
-    template<typename Statement> class STOP { public: typedef Statement reType; };
+    template<typename Statement1> class STOP { public: typedef Statement1 reType; };
 public:
     typedef typename
         IF_<Condition<Statement>::ret,

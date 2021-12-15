@@ -81,6 +81,5 @@ int main()
     std::cout << lcm_r(100, 36) << '\n';
     std::cout << lcm_T<100, 36>::ret << '\n';
     std::cout << lcm_T_r<100, 36>::ret << '\n';
-    std::cin.get();
     return 0;
 }

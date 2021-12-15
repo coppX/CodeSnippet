@@ -36,7 +36,6 @@ int main()
     t3 = omp_get_wtime() - t3;
 
     std::cout << t1 / t3 << '\t' << t2 / t3 << '\n';
-    std::cin.get();
 
     return 0;
 }
