@@ -12,6 +12,7 @@ set(CHAPTERS
 set(test
     test_template_if
     test_template_while
+    test_gcd_lcm
 )
 
 foreach(CHAPTER ${CHAPTERS})
