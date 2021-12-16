@@ -31,7 +31,7 @@ struct ptr_list_item {
 
 #define LIST_ITEM_SIZE  ALIGN(sizeof(ptr_list_item))
 
-class MemDetect
+class memDetect
 {
 public:
 	static void* allocate(size_t size, const char* filename, int line);
@@ -40,10 +40,10 @@ public:
 	static std::mutex m;
 };
 
-ptr_list_item* MemDetect::list = nullptr;
-std::mutex MemDetect::m = {};
+ptr_list_item* memDetect::list = nullptr;
+std::mutex memDetect::m = {};
 
-void* MemDetect::allocate(size_t size, const char* filename, int line)
+void* memDetect::allocate(size_t size, const char* filename, int line)
 {
 	int s = size + LIST_ITEM_SIZE;
 	ptr_list_item* raw_ptr = reinterpret_cast<ptr_list_item*>(malloc(s));
@@ -77,7 +77,7 @@ void* MemDetect::allocate(size_t size, const char* filename, int line)
 	return reinterpret_cast<void*>(user_ptr);
 }
 
-void MemDetect::deallocate (void* ptr)
+void memDetect::deallocate (void* ptr)
 {
 	u8* raw_ptr = reinterpret_cast<u8*>(ptr) - LIST_ITEM_SIZE;
 	
@@ -128,21 +128,3 @@ void operator delete[](void* ptr) noexcept
 //#define delete strcpy(filename, __FILE__), line = __LINE__, delete
 #endif
 
-int main()
-{
-	int x = _MSC_VER;
-
-	class A {
-		int a;
-		int b;
-	};
-	//test
-  A* a = new A[10];
-  
-  delete [] a;
-
-	int* b = new int;
-	delete b;
-  
-  return 0;
-}
