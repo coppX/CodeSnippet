@@ -14,6 +14,7 @@ set(test
     test_template_while
     test_gcd_lcm
     test_loop_unrolling
+    test_template_expression
 )
 foreach(CHAPTER ${CHAPTERS})
     foreach(DEMO ${${CHAPTER}})
