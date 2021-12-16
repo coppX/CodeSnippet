@@ -10,6 +10,7 @@ set(CHAPTERS
 )
 
 set(test
+    test_mem_detect
     test_template_if
     test_template_while
     test_gcd_lcm
