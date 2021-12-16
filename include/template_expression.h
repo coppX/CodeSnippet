@@ -76,7 +76,7 @@ DExpr<DBinExprOp<DExpr<A>, DExpr<B>, DApAdd>>
 operator+(const DExpr<A>& a, const DExpr<B>& b)
 {
     typedef DBinExprOp<DExpr<A>, DExpr<B>, DApAdd> ExprT;
-    return DExpr<ExprT>(a, b);
+    return DExpr<ExprT>(ExprT(a, b));
 }
 
 // sqrt(), square rooting
@@ -86,7 +86,7 @@ DExpr<DUnaryExprOp<DExpr<A>, DApSqrt>>
 sqrt(const DExpr<A>& a)
 {
     typedef DUnaryExprOp<DExpr<A>, DApSqrt> ExprT;
-    return DExpr<ExprT>(a);
+    return DExpr<ExprT>(ExprT(a));
 }
 
 // operator-, negative sign
@@ -96,7 +96,7 @@ DExpr<DUnaryExprOp<DExpr<A>, DApNeg>>
 operator-(const DExpr<A>& a)
 {
     typedef DUnaryExprOp<DExpr<A>, DApNeg> ExprT;
-    return DExpr<ExprT>(a);
+    return DExpr<ExprT>(ExprT(a));
 }
 
 // evaluate()
