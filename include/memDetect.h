@@ -31,7 +31,7 @@ struct ptr_list_item {
 
 #define LIST_ITEM_SIZE  ALIGN(sizeof(ptr_list_item))
 
-class memDetect
+class MemDetect
 {
 public:
 	static void* allocate(size_t size, const char* filename, int line);
@@ -40,10 +40,10 @@ public:
 	static std::mutex m;
 };
 
-ptr_list_item* memDetect::list = nullptr;
-std::mutex memDetect::m = {};
+ptr_list_item* MemDetect::list = nullptr;
+std::mutex MemDetect::m = {};
 
-void* memDetect::allocate(size_t size, const char* filename, int line)
+void* MemDetect::allocate(size_t size, const char* filename, int line)
 {
 	int s = size + LIST_ITEM_SIZE;
 	ptr_list_item* raw_ptr = reinterpret_cast<ptr_list_item*>(malloc(s));
@@ -77,7 +77,7 @@ void* memDetect::allocate(size_t size, const char* filename, int line)
 	return reinterpret_cast<void*>(user_ptr);
 }
 
-void memDetect::deallocate (void* ptr)
+void MemDetect::deallocate (void* ptr)
 {
 	u8* raw_ptr = reinterpret_cast<u8*>(ptr) - LIST_ITEM_SIZE;
 	
